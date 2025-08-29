@@ -6,6 +6,7 @@ from sqlalchemy.pool import StaticPool
 from main import app
 from models import table_registry, User
 from DB import get_session
+from security import  get_password
 
 
 @pytest.fixture()
@@ -34,10 +35,18 @@ def session():
     table_registry.metadata.drop_all(engine)
 
 
-@pytest.fixture()
+@pytest.fixture
 def user(session):
-    user = User(username='Teste', email='teste@test.com', password='testtest')
+    password = 'testtest'
+    user = User(
+        username='Teste',
+        email='teste@test.com',
+        password=get_password(password),
+    )
     session.add(user)
     session.commit()
     session.refresh(user)
+
+    user.clean_password = password
+
     return user
