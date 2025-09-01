@@ -6,7 +6,7 @@ from sqlalchemy.pool import StaticPool
 from main import app
 from models import table_registry, User
 from DB import get_session
-from security import  get_password
+from security import get_password
 
 
 @pytest.fixture()

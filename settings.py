@@ -6,4 +6,3 @@ class Settings(BaseSettings):
         env_file='.env', env_file_encoding='utf8'
     )
     DATABASE_URL: str
-
