@@ -18,7 +18,8 @@ dependencies = [
     "pwdlib[argon2] (>=0.2.1,<0.3.0)",
     "python-multipart (>=0.0.20,<0.0.21)",
     "pyjwt (>=2.10.1,<3.0.0)",
-    "tzdata (>=2025.2,<2026.0)"
+    "tzdata (>=2025.2,<2026.0)",
+    "freezegun (>=1.5.5,<2.0.0)"
 ]
 
 [tool.poetry]
@@ -30,6 +31,7 @@ pytest = "^8.4.1"
 pytest-cov = "^6.2.1"
 taskipy = "^1.14.1"
 ruff = "^0.12.9"
+factory-boy = "^3.3.3"
 [tool.ruff]
 line-length = 79
 extend-exclude = ['migrations']

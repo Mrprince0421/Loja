@@ -1,3 +1,4 @@
+# loja/models.py
 from datetime import datetime
 from sqlalchemy.orm import Mapped, registry, mapped_column
 from sqlalchemy import func
@@ -16,3 +17,14 @@ class User:
     created_at: Mapped[datetime] = mapped_column(
         init=False, server_default=func.now()
     )
+
+
+@table_registry.mapped_as_dataclass
+class Product:
+    __tablename__ = 'products'
+
+    id: Mapped[int] = mapped_column(init=False, primary_key=True)
+    name: Mapped[str]
+    description: Mapped[str | None]
+    price: Mapped[float]
+    QT: Mapped[int] # <- Corrigido aqui

@@ -1,4 +1,6 @@
+# loja/tests/conftest.py
 import pytest
+import factory
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -8,6 +10,13 @@ from models import table_registry, User
 from DB import get_session
 from security import get_password
 
+class UserFactory(factory.Factory):
+    class Meta:
+        model = User
+
+    username = factory.Sequence(lambda n: f'test{n}')
+    email = factory.LazyAttribute(lambda obj: f'{obj.username}@test.com')
+    # A linha 'password' foi removida para evitar conflitos.
 
 @pytest.fixture()
 def client(session):
@@ -38,11 +47,10 @@ def session():
 @pytest.fixture
 def user(session):
     password = 'testtest'
-    user = User(
-        username='Teste',
-        email='teste@test.com',
-        password=get_password(password),
+    user = UserFactory(
+        password=get_password(password)
     )
+
     session.add(user)
     session.commit()
     session.refresh(user)
@@ -50,3 +58,11 @@ def user(session):
     user.clean_password = password
 
     return user
+
+@pytest.fixture()
+def token(client, user):
+    response = client.post(
+        '/auth/token',
+        data={'username': user.email, 'password': user.clean_password},
+    )
+    return response.json().get('access_token')
