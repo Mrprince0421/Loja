@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciamento de Produtos</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <div class="navbar">
+                <a href="/">Home</a>
+                <a href="/login">Login</a>
+                <a href="/register">Cadastro</a>
+                <a href="/products-page">Produtos</a>
+                <a href="/sales">Vendas</a>
+                <a href="/accounting">Contabilidade</a>
+            </div>
+        </div>
+    </div>
+    <div class="container">
+        <h1>Gerenciamento de Produtos</h1>
+        <div class="content">
+            <div class="form-section">
+                <h3>Opções de Gerenciamento</h3>
+                <ul>
+                    <li><a href="/create-product-page" class="button-link">Cadastrar Novo Produto</a></li>
+                    <li><a href="/update-product-page" class="button-link">Atualizar Produto</a></li>
+                    <li><a href="/delete-product-page" class="button-link">Deletar Produto</a></li>
+                </ul>
+            </div>
+
+            <div class="form-section">
+                <h2>Pesquisar e Listar Produtos</h2>
+                <form id="get-products-form">
+                    <label for="search-name">Nome (opcional):</label>
+                    <input type="text" id="search-name" name="name">
+                    <label for="search-id">ID (opcional):</label>
+                    <input type="number" id="search-id" name="product_id">
+                    <input type="submit" value="Pesquisar Produtos">
+                </form>
+            </div>
+
+            <div class="response-section">
+                <div id="alert-message"></div>
+                <div id="search-results">
+                    <h3>Resultados da Pesquisa</h3>
+                    <ul id="product-list" class="product-list"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        // -- LÓGICA DE VERIFICAÇÃO DE LOGIN --
+        let accessToken = localStorage.getItem('accessToken') || null;
+        if (!accessToken) {
+            window.location.href = '/login';
+        }
+        // -- FIM DA LÓGICA DE VERIFICAÇÃO --
+
+        const baseURL = window.location.origin;
+        const alertMessage = document.getElementById('alert-message');
+        const productListEl = document.getElementById('product-list');
+
+        function handleResponse(response) {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        }
+
+        function handleError(error) {
+            console.error('Fetch error:', error);
+            alertMessage.innerHTML = `<div class="alert alert-error">${error.message}</div>`;
+        }
+
+        document.getElementById('get-products-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const searchParams = new URLSearchParams();
+
+            for (const [key, value] of formData.entries()) {
+                if (value) {
+                    searchParams.append(key, value);
+                }
+            }
+
+            alertMessage.innerHTML = '';
+
+            try {
+                const accessToken = localStorage.getItem('accessToken');
+                if (!accessToken) throw new Error('Token de acesso não encontrado. Faça login primeiro.');
+
+                const response = await fetch(`${baseURL}/products/?${searchParams.toString()}`, {
+                    method: 'GET',
+                    headers: {'Authorization': `Bearer ${accessToken}`},
+                });
+                const result = await handleResponse(response);
+                productListEl.innerHTML = '';
+                if (result.length === 0) {
+                    productListEl.innerHTML = '<p>Nenhum produto encontrado.</p>';
+                    alertMessage.innerHTML = `<div class="alert alert-error">Nenhum produto encontrado.</div>`;
+                } else {
+                    result.forEach(product => {
+                        const li = document.createElement('li');
+                        li.className = 'product-item';
+                        li.innerHTML = `
+                            <div class="product-info">
+                                <strong>${product.name} (ID: ${product.id})</strong> - R$ ${product.price.toFixed(2)} | Estoque: ${product.QT}
+                            </div>
+                        `;
+                        productListEl.appendChild(li);
+                    });
+                    alertMessage.innerHTML = `<div class="alert alert-success">${result.length} produto(s) encontrado(s).</div>`;
+                }
+            } catch (error) {
+                handleError(error);
+            }
+        });
+    </script>
+</body>
+</html>

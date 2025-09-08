@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vendas - Loja FastAPI</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <div class="navbar">
+                <a href="/">Home</a>
+                <a href="/login">Login</a>
+                <a href="/register">Cadastro</a>
+                <a href="/products-page">Produtos</a>
+                <a href="/sales">Vendas</a>
+                <a href="/accounting">Contabilidade</a>
+            </div>
+        </div>
+    </div>
+    <div class="container">
+        <h1>Vendas (Carrinho de Compras)</h1>
+        <div class="content">
+            <div class="form-section">
+                <h2>Pesquisar e Adicionar Produtos</h2>
+                <form id="get-products-form">
+                    <label for="search-name">Nome (opcional):</label>
+                    <input type="text" id="search-name" name="name">
+                    <label for="search-id">ID (opcional):</label>
+                    <input type="number" id="search-id" name="product_id">
+                    <input type="submit" value="Pesquisar Produtos">
+                </form>
+
+                <div id="search-results">
+                    <h3>Resultados da Pesquisa</h3>
+                    <ul id="product-list" class="product-list"></ul>
+                </div>
+            </div>
+
+            <div class="response-section">
+                <div id="alert-message"></div>
+                <div id="shopping-cart">
+                    <h3>Carrinho de Compras</h3>
+                    <ul id="cart-list" class="cart-list"></ul>
+                    <p class="cart-total"><strong>Total: R$ <span id="cart-total">0.00</span></strong></p>
+                    <button id="checkout-button">Gerar Pagamento</button>
+                </div>
+
+                <div id="payment-area" style="display: none;">
+                    <h3>Área de Pagamento</h3>
+                    <p>Pagamento gerado. Valor total: R$ <span id="payment-total"></span></p>
+                    <p>Aponte a câmera do seu celular para o QR Code:</p>
+                    <img id="qr-code-img" src="" alt="QR Code de Pagamento" style="width: 200px; height: 200px;">
+                    <p><strong>Aguardando confirmação do pagamento...</strong></p>
+                    <button id="confirm-payment-button">Confirmar Pagamento</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Lógica de verificação de login no carregamento da página
+        let accessToken = localStorage.getItem('accessToken') || null;
+        if (!accessToken) {
+            window.location.href = '/login';
+        }
+
+        const baseURL = window.location.origin;
+        const alertMessage = document.getElementById('alert-message');
+        const productListEl = document.getElementById('product-list');
+        const cartListEl = document.getElementById('cart-list');
+        const cartTotalEl = document.getElementById('cart-total');
+        const paymentAreaEl = document.getElementById('payment-area');
+        const paymentTotalEl = document.getElementById('payment-total');
+        const qrCodeImgEl = document.getElementById('qr-code-img');
+        const confirmPaymentButton = document.getElementById('confirm-payment-button');
+
+        let cart = {};
+
+        function handleResponse(response) {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        }
+
+        function handleError(error) {
+            console.error('Fetch error:', error);
+            alertMessage.innerHTML = `<div class="alert alert-error">${error.message}</div>`;
+        }
+
+        document.getElementById('get-products-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const searchParams = new URLSearchParams();
+
+            for (const [key, value] of formData.entries()) {
+                if (value) {
+                    searchParams.append(key, value);
+                }
+            }
+
+            alertMessage.innerHTML = '';
+
+            try {
+                if (!accessToken) throw new Error('Token de acesso não encontrado. Faça login primeiro.');
+
+                const response = await fetch(`${baseURL}/products/?${searchParams.toString()}`, {
+                    method: 'GET',
+                    headers: {'Authorization': `Bearer ${accessToken}`}, // <-- Adicionado o token
+                });
+                const result = await handleResponse(response);
+                productListEl.innerHTML = '';
+                if (result.length === 0) {
+                    productListEl.innerHTML = '<p>Nenhum produto encontrado.</p>';
+                    alertMessage.innerHTML = `<div class="alert alert-error">Nenhum produto encontrado.</div>`;
+                } else {
+                    result.forEach(product => {
+                        const li = document.createElement('li');
+                        li.className = 'product-item';
+                        li.innerHTML = `
+                            <div class="product-info">
+                                <strong>${product.name} (ID: ${product.id})</strong> - R$ ${product.price.toFixed(2)} | Estoque: ${product.QT}
+                            </div>
+                            <div class="product-actions">
+                                <input type="number" id="qt-${product.id}" value="1" min="1" max="${product.QT}">
+                                <button onclick="addToCart(${product.id}, document.getElementById('qt-${product.id}').value, '${product.name}', ${product.price}, ${product.QT})">Adicionar ao Carrinho</button>
+                            </div>
+                        `;
+                        productListEl.appendChild(li);
+                    });
+                    alertMessage.innerHTML = `<div class="alert alert-success">${result.length} produto(s) encontrado(s).</div>`;
+                }
+            } catch (error) {
+                handleError(error);
+            }
+        });
+
+        function renderCart() {
+            cartListEl.innerHTML = '';
+            let total = 0;
+            for (const productId in cart) {
+                const item = cart[productId];
+                const li = document.createElement('li');
+                li.className = 'cart-item';
+                li.innerHTML = `
+                    <div class="cart-item-info">
+                        <strong>${item.name}</strong> - R$ ${item.price.toFixed(2)} x ${item.QT} = R$ ${(item.price * item.QT).toFixed(2)}
+                    </div>
+                    <div class="cart-item-actions">
+                        <input type="number" value="${item.QT}" min="1" max="${item.stock_QT}" style="width: 60px;">
+                        <button onclick="updateCartItem(${item.id}, this.previousElementSibling.value)">Atualizar</button>
+                        <button onclick="removeCartItem(${item.id})">Remover</button>
+                    </div>
+                `;
+                cartListEl.appendChild(li);
+                total += item.price * item.QT;
+            }
+            cartTotalEl.textContent = total.toFixed(2);
+        }
+
+        function addToCart(productId, qt, name, price, stock_QT) {
+            const quantity = parseInt(qt);
+            if (quantity > 0 && quantity <= stock_QT) {
+                cart[productId] = { id: productId, name, price, QT: quantity, stock_QT };
+                renderCart();
+                alertMessage.innerHTML = `<div class="alert alert-success">Produto "${name}" adicionado ao carrinho.</div>`;
+            } else {
+                alertMessage.innerHTML = `<div class="alert alert-error">Quantidade inválida. O estoque disponível é de ${stock_QT}.</div>`;
+            }
+        }
+
+        function updateCartItem(productId, newQT) {
+            const item = cart[productId];
+            if (item) {
+                const newQuantity = parseInt(newQT);
+                if (newQuantity > 0 && newQuantity <= item.stock_QT) {
+                    item.QT = newQuantity;
+                    renderCart();
+                    alertMessage.innerHTML = `<div class="alert alert-success">Item "${item.name}" atualizado.</div>`;
+                } else {
+                    alertMessage.innerHTML = `<div class="alert alert-error">Quantidade inválida. O estoque disponível é de ${item.stock_QT}.</div>`;
+                }
+            }
+        }
+
+        function removeCartItem(productId) {
+            const item = cart[productId];
+            if (item) {
+                delete cart[productId];
+                renderCart();
+                alertMessage.innerHTML = `<div class="alert alert-success">Item "${item.name}" removido do carrinho.</div>`;
+            }
+        }
+
+        document.getElementById('checkout-button').addEventListener('click', async () => {
+            alertMessage.innerHTML = '';
+
+            try {
+                if (!accessToken) throw new Error('Token de acesso não encontrado. Faça login primeiro.');
+
+                const items = Object.values(cart).map(item => ({ product_id: item.id, QT: item.QT }));
+
+                if (items.length === 0) {
+                    alertMessage.innerHTML = `<div class="alert alert-error">O carrinho está vazio.</div>`;
+                    return;
+                }
+
+                const paymentResponse = await fetch(`${baseURL}/sales/create-payment`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify({ items }),
+                });
+
+                const paymentResult = await handleResponse(paymentResponse);
+
+                paymentTotalEl.textContent = paymentResult.total_price.toFixed(2);
+                qrCodeImgEl.src = `data:image/png;base64,${paymentResult.qr_code_base64}`;
+                paymentAreaEl.style.display = 'block';
+
+                alertMessage.innerHTML = `<div class="alert alert-success">Pagamento gerado com sucesso! ID: ${paymentResult.payment_id}</div>`;
+            } catch (error) {
+                handleError(error);
+            }
+        });
+
+        document.getElementById('confirm-payment-button').addEventListener('click', async () => {
+            alertMessage.innerHTML = '';
+
+            try {
+                if (!accessToken) throw new Error('Token de acesso não encontrado. Faça login primeiro.');
+
+                const items = Object.values(cart).map(item => ({ product_id: item.id, QT: item.QT }));
+
+                const finalSaleResponse = await fetch(`${baseURL}/sales/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify({ items }),
+                });
+
+                const finalSaleResult = await handleResponse(finalSaleResponse);
+
+                alertMessage.innerHTML = `<div class="alert alert-success">Venda finalizada!</div>`;
+                cart = {};
+                renderCart();
+                paymentAreaEl.style.display = 'none';
+
+            } catch (error) {
+                handleError(error);
+            }
+        });
+    </script>
+</body>
+</html>

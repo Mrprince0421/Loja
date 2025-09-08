@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Atualizar Produto</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <div class="navbar">
+                <a href="/">Home</a>
+                <a href="/login">Login</a>
+                <a href="/register">Cadastro</a>
+                <a href="/products-page">Produtos</a>
+                <a href="/sales">Vendas</a>
+                <a href="/accounting">Contabilidade</a>a
+            </div>
+        </div>
+    </div>
+    <div class="container">
+        <h1>Atualizar Produto</h1>
+        <div class="content">
+            <div class="form-section">
+                <form id="update-product-form">
+                    <h3>Informações de Atualização</h3>
+                    <label for="update-id">ID do Produto:</label>
+                    <input type="number" id="update-id" name="id" required>
+                    <label for="update-name">Novo Nome (opcional):</label>
+                    <input type="text" id="update-name" name="name">
+                    <label for="update-description">Nova Descrição (opcional):</label>
+                    <input type="text" id="update-description" name="description">
+                    <label for="update-price">Novo Preço (opcional):</label>
+                    <input type="number" step="0.01" id="update-price" name="price">
+                    <label for="update-qt">Nova Quantidade (opcional):</label>
+                    <input type="number" id="update-qt" name="QT">
+                    <input type="submit" value="Atualizar Produto">
+                </form>
+            </div>
+            <div class="response-section">
+                <div id="alert-message"></div>
+            </div>
+        </div>
+    </div>
+    <script>
+        let accessToken = localStorage.getItem('accessToken') || null;
+        const baseURL = window.location.origin;
+        const alertMessage = document.getElementById('alert-message');
+
+        function handleResponse(response) {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        }
+
+        function handleError(error) {
+            console.error('Fetch error:', error);
+            alertMessage.innerHTML = `<div class="alert alert-error">${error.message}</div>`;
+        }
+
+        document.getElementById('update-product-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const id = formData.get('id');
+            const data = {};
+
+            for (const [key, value] of formData.entries()) {
+                if (value && key !== 'id') {
+                    data[key] = value;
+                }
+            }
+
+            alertMessage.innerHTML = '';
+
+            try {
+                if (!accessToken) throw new Error('Token de acesso não encontrado. Faça login primeiro.');
+
+                const response = await fetch(`${baseURL}/products/${id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify(data),
+                });
+                const result = await handleResponse(response);
+                alertMessage.innerHTML = `<div class="alert alert-success">Produto com ID ${result.id} atualizado com sucesso!</div>`;
+            } catch (error) {
+                handleError(error);
+            }
+        });
+    </script>
+</body>
+</html>

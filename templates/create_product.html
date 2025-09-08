@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastrar Produto</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <div class="navbar">
+                <a href="/">Home</a>
+                <a href="/login">Login</a>
+                <a href="/register">Cadastro</a>
+                <a href="/products-page">Produtos</a>
+                <a href="/sales">Vendas</a>
+                <a href="/accounting">Contabilidade</a>
+            </div>
+        </div>
+    </div>
+    <div class="container">
+        <h1>Cadastrar Novo Produto</h1>
+        <div class="content">
+            <div class="form-section">
+                <form id="create-product-form">
+                    <h3>Informações do Produto</h3>
+                    <label for="prod-name">Nome:</label>
+                    <input type="text" id="prod-name" name="name" required>
+                    <label for="prod-description">Descrição:</label>
+                    <input type="text" id="prod-description" name="description">
+                    <label for="prod-price">Preço:</label>
+                    <input type="number" step="0.01" id="prod-price" name="price" required>
+                    <label for="prod-qt">Quantidade:</label>
+                    <input type="number" id="prod-qt" name="QT" required>
+                    <input type="submit" value="Criar Produto">
+                </form>
+            </div>
+            <div class="response-section">
+                <div id="alert-message"></div>
+            </div>
+        </div>
+    </div>
+    <script>
+        let accessToken = localStorage.getItem('accessToken') || null;
+        const baseURL = window.location.origin;
+        const alertMessage = document.getElementById('alert-message');
+
+        function handleResponse(response) {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        }
+
+        function handleError(error) {
+            console.error('Fetch error:', error);
+            alertMessage.innerHTML = `<div class="alert alert-error">${error.message}</div>`;
+        }
+
+        document.getElementById('create-product-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = Object.fromEntries(new FormData(e.target));
+
+            alertMessage.innerHTML = '';
+
+            try {
+                if (!accessToken) throw new Error('Token de acesso não encontrado. Faça login primeiro.');
+
+                const response = await fetch(`${baseURL}/products/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify(data),
+                });
+                const result = await handleResponse(response);
+                alertMessage.innerHTML = `<div class="alert alert-success">Produto "${result.name}" criado com sucesso!</div>`;
+            } catch (error) {
+                handleError(error);
+            }
+        });
+    </script>
+</body>
+</html>

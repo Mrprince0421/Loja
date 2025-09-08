@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contabilidade Diária</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <div class="navbar">
+                <a href="/">Home</a>
+                <a href="/login">Login</a>
+                <a href="/register">Cadastro</a>
+                <a href="/products-page">Produtos</a>
+                <a href="/sales">Vendas</a>
+                <a href="/accounting">Contabilidade</a>
+            </div>
+        </div>
+    </div>
+    <div class="container">
+        <h1>Relatório de Vendas do Dia</h1>
+        <div class="content">
+            <div class="response-section">
+                <div id="alert-message"></div>
+                <div id="sales-report-display">
+                    <h3>Carregando dados...</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        let accessToken = localStorage.getItem('accessToken') || null;
+        const baseURL = window.location.origin;
+        const alertMessage = document.getElementById('alert-message');
+        const salesReportDisplayEl = document.getElementById('sales-report-display');
+
+        function handleResponse(response) {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        }
+
+        function handleError(error) {
+            console.error('Fetch error:', error);
+            salesReportDisplayEl.innerHTML = `<p style="color:red;">Erro: ${error.message}</p>`;
+            alertMessage.innerHTML = `<div class="alert alert-error">Erro: ${error.message}</div>`;
+        }
+
+        async function fetchDailyReport() {
+            alertMessage.innerHTML = '';
+
+            try {
+                if (!accessToken) {
+                    alertMessage.innerHTML = `<div class="alert alert-error">Você precisa estar logado para ver o relatório. Redirecionando...</div>`;
+                    setTimeout(() => {
+                        window.location.href = '/login';
+                    }, 1000);
+                    return;
+                }
+
+                const response = await fetch(`${baseURL}/sales/daily_report`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                });
+
+                const result = await handleResponse(response);
+
+                salesReportDisplayEl.innerHTML = `
+                    <h3>Resumo do Dia</h3>
+                    <p>Total de Vendas: <strong>${result.total_sales}</strong></p>
+                    <p>Valor Total Arrecadado: <strong>R$ ${result.total_amount.toFixed(2)}</strong></p>
+                `;
+
+            } catch (error) {
+                handleError(error);
+                salesReportDisplayEl.innerHTML = `<p style="color:red;">Erro: ${error.message}</p>`;
+            }
+        }
+
+        fetchDailyReport();
+    </script>
+</body>
+</html>

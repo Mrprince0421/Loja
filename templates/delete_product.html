@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deletar Produto</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <div class="navbar">
+                <a href="/">Home</a>
+                <a href="/login">Login</a>
+                <a href="/register">Cadastro</a>
+                <a href="/products-page">Produtos</a>
+                <a href="/sales">Vendas</a>
+                <a href="/accounting">Contabilidade</a>
+            </div>
+        </div>
+    </div>
+    <div class="container">
+        <h1>Deletar Produto</h1>
+        <div class="content">
+            <div class="form-section">
+                <form id="delete-product-form">
+                    <h3>ID do Produto para Deletar</h3>
+                    <label for="delete-id">ID do Produto:</label>
+                    <input type="number" id="delete-id" name="id" required>
+                    <input type="submit" value="Deletar Produto">
+                </form>
+            </div>
+            <div class="response-section">
+                <div id="alert-message"></div>
+            </div>
+        </div>
+    </div>
+    <script>
+        let accessToken = localStorage.getItem('accessToken') || null;
+        const baseURL = window.location.origin;
+        const alertMessage = document.getElementById('alert-message');
+
+        function handleResponse(response) {
+            if (response.status === 204) {
+                return { message: "Produto deletado com sucesso (Status 204 No Content)." };
+            }
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        }
+
+        function handleError(error) {
+            console.error('Fetch error:', error);
+            alertMessage.innerHTML = `<div class="alert alert-error">${error.message}</div>`;
+        }
+
+        document.getElementById('delete-product-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const id = formData.get('id');
+
+            alertMessage.innerHTML = '';
+
+            try {
+                if (!accessToken) throw new Error('Token de acesso não encontrado. Faça login primeiro.');
+
+                const response = await fetch(`${baseURL}/products/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${accessToken}` },
+                });
+
+                const result = await handleResponse(response);
+                alertMessage.innerHTML = `<div class="alert alert-success">Produto com ID ${id} deletado com sucesso.</div>`;
+            } catch (error) {
+                handleError(error);
+            }
+        });
+    </script>
+</body>
+</html>
