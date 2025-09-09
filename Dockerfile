@@ -21,4 +21,4 @@ COPY . /app
 EXPOSE 8000
 
 # Executar a aplicação com Uvicorn
-CMD ["poetry", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["poetry", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
