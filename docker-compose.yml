@@ -15,7 +15,7 @@ services:
     depends_on:
       db:
         condition: service_healthy # Espera o banco de dados estar saudável
-    command: poetry run uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    command: poetry run uvicorn main:app --host 0.0.0.0 --port 8080 --reload
 
   db:
     image: postgres:15
