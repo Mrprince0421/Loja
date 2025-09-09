@@ -1,7 +1,7 @@
 # loja/models.py
 from datetime import datetime
 from sqlalchemy.orm import Mapped, registry, mapped_column
-from sqlalchemy import func,ForeignKey
+from sqlalchemy import func, ForeignKey
 
 table_registry = registry()
 
@@ -24,10 +24,13 @@ class Product:
     __tablename__ = 'products'
 
     id: Mapped[int] = mapped_column(init=False, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey('users.id'))
     name: Mapped[str]
     description: Mapped[str | None]
     price: Mapped[float]
     QT: Mapped[int]
+
+
 @table_registry.mapped_as_dataclass
 class Sale:
     __tablename__ = 'sales'

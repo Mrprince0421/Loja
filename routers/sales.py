@@ -1,9 +1,8 @@
 from http import HTTPStatus
 from typing import Annotated
-
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func
+from sqlalchemy import select, func, and_
 import DB, security, schemas, models
 from security import get_current_user
 from datetime import date, datetime
@@ -18,14 +17,103 @@ def get_daily_sales_report(session: T_Session, current_user: T_CurrentUser):
     today = date.today()
 
     total_sales_count = session.query(models.Sale).filter(
-        func.date(models.Sale.created_at) == today
+        and_(
+            func.date(models.Sale.created_at) == today,
+            models.Sale.user_id == current_user.id
+        )
     ).count()
 
     total_sales_amount = session.query(func.sum(models.Sale.total_price)).filter(
-        func.date(models.Sale.created_at) == today
+        and_(
+            func.date(models.Sale.created_at) == today,
+            models.Sale.user_id == current_user.id
+        )
     ).scalar() or 0
 
     return schemas.DailySales(total_sales=total_sales_count, total_amount=total_sales_amount)
+
+
+@router.get(
+    '/report_by_period',
+    response_model=schemas.SalesByPeriodReport
+)
+def get_sales_by_period(
+        session: T_Session,
+        current_user: T_CurrentUser,
+        start_date: date,
+        end_date: date
+):
+    query = (
+        select(
+            models.Sale.created_at.label('sale_date'),
+            models.SaleItem.QT.label('quantity_sold'),
+            models.Product.name.label('product_name'),
+            models.SaleItem.product_price.label('total_price')
+        )
+        .join(models.Sale)
+        .join(models.Product)
+        .where(
+            and_(
+                models.Sale.created_at >= start_date,
+                models.Sale.created_at <= end_date,
+                models.Sale.user_id == current_user.id
+            )
+        )
+        .order_by(models.Sale.created_at)
+    )
+
+    sales_data = session.execute(query).all()
+
+    report_items = [
+        schemas.SaleItemReport(
+            product_name=item.product_name,
+            quantity_sold=item.quantity_sold,
+            sale_date=item.sale_date,
+            total_price=item.total_price
+        )
+        for item in sales_data
+    ]
+
+    return schemas.SalesByPeriodReport(sales=report_items)
+
+
+@router.get(
+    '/best_selling',
+    response_model=schemas.BestSellingProductsReport
+)
+def get_best_selling_products(
+        session: T_Session,
+        current_user: T_CurrentUser,
+        limit: int = Query(10, gt=0, le=100)
+):
+    query = (
+        select(
+            models.Product.id,
+            models.Product.name,
+            func.sum(models.SaleItem.QT).label('total_quantity_sold'),
+            func.sum(models.SaleItem.QT * models.SaleItem.product_price).label('total_revenue')
+        )
+        .join(models.SaleItem, models.Product.id == models.SaleItem.product_id)
+        .join(models.Sale, models.SaleItem.sale_id == models.Sale.id)
+        .where(models.Sale.user_id == current_user.id)
+        .group_by(models.Product.id, models.Product.name)
+        .order_by(func.sum(models.SaleItem.QT).desc())
+        .limit(limit)
+    )
+
+    best_sellers = session.execute(query).all()
+
+    report_products = [
+        schemas.BestSellingProduct(
+            product_id=item.id,
+            product_name=item.name,
+            total_quantity_sold=item.total_quantity_sold,
+            total_revenue=item.total_revenue
+        )
+        for item in best_sellers
+    ]
+
+    return schemas.BestSellingProductsReport(products=report_products)
 
 
 @router.post(
@@ -40,7 +128,10 @@ def create_payment(
 
     for item in sale.items:
         product = session.scalar(
-            select(models.Product).where(models.Product.id == item.product_id)
+            select(models.Product).where(
+                models.Product.id == item.product_id,
+                models.Product.user_id == current_user.id
+            )
         )
 
         if not product:
@@ -79,7 +170,10 @@ def create_sale(
 
     for item in sale.items:
         product = session.scalar(
-            select(models.Product).where(models.Product.id == item.product_id)
+            select(models.Product).where(
+                models.Product.id == item.product_id,
+                models.Product.user_id == current_user.id
+            )
         )
 
         if not product:

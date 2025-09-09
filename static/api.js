@@ -3,24 +3,52 @@
 const API_BASE_URL = window.location.origin;
 
 /**
- * Formata um objeto de erro para ser exibido de forma legível.
- * Se for uma lista de objetos, formata cada um.
- * @param {any} errorData O dado de erro vindo da API.
- * @returns {string} A mensagem de erro formatada.
+ * Mapeia códigos de status e mensagens de erro da API para mensagens amigáveis.
+ * @param {object} errorData O objeto de erro vindo da API.
+ * @param {number} status O status code da resposta HTTP.
+ * @returns {string} Uma mensagem de erro amigável para o usuário.
  */
-function formatError(errorData) {
-    if (Array.isArray(errorData)) {
-        return errorData.map(err => {
-            const loc = err.loc ? err.loc.join(' -> ') : 'N/A';
-            const msg = err.msg || 'Erro desconhecido';
-            const type = err.type || 'N/A';
-            return `Local: ${loc}\nMensagem: ${msg}\nTipo: ${type}`;
-        }).join('\n\n');
+function getFriendlyErrorMessage(errorData, status) {
+    if (status === 401) {
+        if (errorData && errorData.detail === 'Incorrect username or password') {
+            return 'Usuário ou senha incorretos.';
+        }
+        return 'Sessão expirada ou credenciais inválidas. Por favor, faça login novamente.';
     }
-    if (typeof errorData === 'object' && errorData !== null) {
-        return JSON.stringify(errorData, null, 2);
+
+    if (status === 404) {
+        return 'O recurso solicitado não foi encontrado.';
     }
-    return String(errorData);
+
+    if (status === 409) {
+        if (errorData && errorData.detail) {
+             if (errorData.detail === 'Username already exists') {
+                 return 'Nome de usuário já está em uso.';
+             }
+             if (errorData.detail === 'Email already exists') {
+                 return 'E-mail já está em uso.';
+             }
+             if (errorData.detail === 'Username or Email already exists') {
+                 return 'Nome de usuário ou e-mail já existe.';
+             }
+        }
+        return 'Conflito de dados. Verifique as informações e tente novamente.';
+    }
+
+    // Para erros de validação (Unprocessable Entity - 422)
+    if (status === 422 && errorData && errorData.detail && Array.isArray(errorData.detail)) {
+        let validationErrors = errorData.detail.map(err => {
+            const loc = err.loc ? err.loc[err.loc.length - 1] : 'campo';
+            return `O campo '${loc}' ${err.msg}`;
+        });
+        return `Erro de validação:\n${validationErrors.join('\n')}`;
+    }
+
+    if (errorData && errorData.detail) {
+        return `Erro da API: ${errorData.detail}`;
+    }
+
+    return `Ocorreu um erro inesperado (Status: ${status}).`;
 }
 
 /**
@@ -30,7 +58,7 @@ function formatError(errorData) {
  */
 async function handleResponse(response) {
     if (response.status === 204) {
-        return { message: "Operação realizada com sucesso (Status 204 No Content)." };
+        return { message: "Operação realizada com sucesso." };
     }
     if (!response.ok) {
         let errorData;
@@ -40,7 +68,8 @@ async function handleResponse(response) {
             throw new Error(`Erro HTTP! status: ${response.status}`);
         }
 
-        const error = new Error('Erro da API');
+        const friendlyMessage = getFriendlyErrorMessage(errorData, response.status);
+        const error = new Error(friendlyMessage);
         error.detail = errorData.detail;
         throw error;
     }
@@ -50,19 +79,17 @@ async function handleResponse(response) {
 /**
  * Lida com a exibição de erros na interface.
  * @param {Error} error O objeto de erro.
- * @param {HTMLElement} outputElement Elemento para exibir o JSON.
  * @param {HTMLElement} alertElement Elemento para exibir a mensagem de alerta.
  */
-function handleError(error, outputElement, alertElement) {
+function handleError(error, alertElement) {
     console.error('Fetch error:', error);
     let errorMessage = `Erro: ${error.message}`;
 
-    if (error.detail) {
-        errorMessage = `Erro:\n\n${formatError(error.detail)}`;
+    if (error.detail && typeof error.detail === 'string') {
+        errorMessage = `Erro da API: ${error.detail}`;
     }
 
     alertElement.innerHTML = `<div class="alert alert-error">${errorMessage}</div>`;
-    outputElement.textContent = '';
 }
 
 /**

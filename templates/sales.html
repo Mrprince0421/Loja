@@ -11,11 +11,16 @@
         <div class="container">
             <div class="navbar">
                 <a href="/">Home</a>
-                <a href="/login">Login</a>
-                <a href="/register">Cadastro</a>
-                <a href="/products-page">Produtos</a>
-                <a href="/sales">Vendas</a>
-                <a href="/accounting">Contabilidade</a>
+                <div id="logged-out-nav" style="display: none;">
+                    <a href="/login">Login</a>
+                    <a href="/register">Cadastro</a>
+                </div>
+                <div id="logged-in-nav" style="display: none;">
+                    <a href="/products-page">Produtos</a>
+                    <a href="/sales">Vendas</a>
+                    <a href="/accounting">Contabilidade</a>
+                    <a href="#" onclick="logout()">Sair</a>
+                </div>
             </div>
         </div>
     </div>
@@ -29,7 +34,10 @@
                     <input type="text" id="search-name" name="name">
                     <label for="search-id">ID (opcional):</label>
                     <input type="number" id="search-id" name="product_id">
-                    <input type="submit" value="Pesquisar Produtos">
+                    <button type="submit" id="get-products-submit">
+                        Pesquisar Produtos
+                        <span class="loading-spinner" id="get-products-spinner"></span>
+                    </button>
                 </form>
 
                 <div id="search-results">
@@ -44,7 +52,10 @@
                     <h3>Carrinho de Compras</h3>
                     <ul id="cart-list" class="cart-list"></ul>
                     <p class="cart-total"><strong>Total: R$ <span id="cart-total">0.00</span></strong></p>
-                    <button id="checkout-button">Gerar Pagamento</button>
+                    <button id="checkout-button">
+                        Gerar Pagamento
+                        <span class="loading-spinner" id="checkout-spinner"></span>
+                    </button>
                 </div>
 
                 <div id="payment-area" style="display: none;">
@@ -53,18 +64,40 @@
                     <p>Aponte a câmera do seu celular para o QR Code:</p>
                     <img id="qr-code-img" src="" alt="QR Code de Pagamento" style="width: 200px; height: 200px;">
                     <p><strong>Aguardando confirmação do pagamento...</strong></p>
-                    <button id="confirm-payment-button">Confirmar Pagamento</button>
+                    <button id="confirm-payment-button">
+                        Confirmar Pagamento
+                        <span class="loading-spinner" id="confirm-payment-spinner"></span>
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 
+    <script src="/static/api.js"></script>
     <script>
-        // Lógica de verificação de login no carregamento da página
-        let accessToken = localStorage.getItem('accessToken') || null;
-        if (!accessToken) {
-            window.location.href = '/login';
+        const loggedInNav = document.getElementById('logged-in-nav');
+        const loggedOutNav = document.getElementById('logged-out-nav');
+
+        function checkAuth() {
+            const accessToken = localStorage.getItem('accessToken');
+            if (accessToken) {
+                loggedInNav.style.display = 'flex';
+                loggedOutNav.style.display = 'none';
+            } else {
+                loggedOutNav.style.display = 'flex';
+                loggedInNav.style.display = 'none';
+                const protectedPages = ['/products-page', '/sales', '/accounting', '/create-product-page', '/update-product-page', '/delete-product-page'];
+                if (protectedPages.includes(window.location.pathname) && !accessToken) {
+                    window.location.href = '/login';
+                }
+            }
         }
+
+        function logout() {
+            localStorage.removeItem('accessToken');
+            window.location.href = '/';
+        }
+        checkAuth();
 
         const baseURL = window.location.origin;
         const alertMessage = document.getElementById('alert-message');
@@ -78,16 +111,14 @@
 
         let cart = {};
 
-        function handleResponse(response) {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
+        function showLoading(buttonId, spinnerId) {
+            document.getElementById(buttonId).disabled = true;
+            document.getElementById(spinnerId).style.display = 'inline-block';
         }
 
-        function handleError(error) {
-            console.error('Fetch error:', error);
-            alertMessage.innerHTML = `<div class="alert alert-error">${error.message}</div>`;
+        function hideLoading(buttonId, spinnerId) {
+            document.getElementById(buttonId).disabled = false;
+            document.getElementById(spinnerId).style.display = 'none';
         }
 
         document.getElementById('get-products-form').addEventListener('submit', async (e) => {
@@ -102,21 +133,19 @@
             }
 
             alertMessage.innerHTML = '';
+            showLoading('get-products-submit', 'get-products-spinner');
 
             try {
+                const accessToken = localStorage.getItem('accessToken');
                 if (!accessToken) throw new Error('Token de acesso não encontrado. Faça login primeiro.');
 
-                const response = await fetch(`${baseURL}/products/?${searchParams.toString()}`, {
-                    method: 'GET',
-                    headers: {'Authorization': `Bearer ${accessToken}`}, // <-- Adicionado o token
-                });
-                const result = await handleResponse(response);
+                const result = await getData('/products/', searchParams, accessToken);
                 productListEl.innerHTML = '';
-                if (result.length === 0) {
+                if (result.products.length === 0) {
                     productListEl.innerHTML = '<p>Nenhum produto encontrado.</p>';
                     alertMessage.innerHTML = `<div class="alert alert-error">Nenhum produto encontrado.</div>`;
                 } else {
-                    result.forEach(product => {
+                    result.products.forEach(product => {
                         const li = document.createElement('li');
                         li.className = 'product-item';
                         li.innerHTML = `
@@ -130,10 +159,12 @@
                         `;
                         productListEl.appendChild(li);
                     });
-                    alertMessage.innerHTML = `<div class="alert alert-success">${result.length} produto(s) encontrado(s).</div>`;
+                    alertMessage.innerHTML = `<div class="alert alert-success">${result.products.length} produto(s) encontrado(s).</div>`;
                 }
             } catch (error) {
-                handleError(error);
+                handleError(error, alertMessage);
+            } finally {
+                hideLoading('get-products-submit', 'get-products-spinner');
             }
         });
 
@@ -180,7 +211,6 @@
                     renderCart();
                     alertMessage.innerHTML = `<div class="alert alert-success">Item "${item.name}" atualizado.</div>`;
                 } else {
-                    alertMessage.innerHTML = `<div class="alert alert-error">Quantidade inválida. O estoque disponível é de ${item.stock_QT}.</div>`;
                 }
             }
         }
@@ -196,8 +226,10 @@
 
         document.getElementById('checkout-button').addEventListener('click', async () => {
             alertMessage.innerHTML = '';
+            showLoading('checkout-button', 'checkout-spinner');
 
             try {
+                const accessToken = localStorage.getItem('accessToken');
                 if (!accessToken) throw new Error('Token de acesso não encontrado. Faça login primeiro.');
 
                 const items = Object.values(cart).map(item => ({ product_id: item.id, QT: item.QT }));
@@ -207,16 +239,7 @@
                     return;
                 }
 
-                const paymentResponse = await fetch(`${baseURL}/sales/create-payment`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${accessToken}`
-                    },
-                    body: JSON.stringify({ items }),
-                });
-
-                const paymentResult = await handleResponse(paymentResponse);
+                const paymentResult = await postData('/sales/create-payment', { items }, 'application/json', accessToken);
 
                 paymentTotalEl.textContent = paymentResult.total_price.toFixed(2);
                 qrCodeImgEl.src = `data:image/png;base64,${paymentResult.qr_code_base64}`;
@@ -224,28 +247,23 @@
 
                 alertMessage.innerHTML = `<div class="alert alert-success">Pagamento gerado com sucesso! ID: ${paymentResult.payment_id}</div>`;
             } catch (error) {
-                handleError(error);
+                handleError(error, alertMessage);
+            } finally {
+                hideLoading('checkout-button', 'checkout-spinner');
             }
         });
 
         document.getElementById('confirm-payment-button').addEventListener('click', async () => {
             alertMessage.innerHTML = '';
+            showLoading('confirm-payment-button', 'confirm-payment-spinner');
 
             try {
+                const accessToken = localStorage.getItem('accessToken');
                 if (!accessToken) throw new Error('Token de acesso não encontrado. Faça login primeiro.');
 
                 const items = Object.values(cart).map(item => ({ product_id: item.id, QT: item.QT }));
 
-                const finalSaleResponse = await fetch(`${baseURL}/sales/`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${accessToken}`
-                    },
-                    body: JSON.stringify({ items }),
-                });
-
-                const finalSaleResult = await handleResponse(finalSaleResponse);
+                await postData('/sales/', { items }, 'application/json', accessToken);
 
                 alertMessage.innerHTML = `<div class="alert alert-success">Venda finalizada!</div>`;
                 cart = {};
@@ -253,7 +271,9 @@
                 paymentAreaEl.style.display = 'none';
 
             } catch (error) {
-                handleError(error);
+                handleError(error, alertMessage);
+            } finally {
+                hideLoading('confirm-payment-button', 'confirm-payment-spinner');
             }
         });
     </script>

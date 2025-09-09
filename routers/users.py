@@ -93,4 +93,3 @@ def read_users(
 ):
     users = session.scalars(select(User).offset(skip).limit(limit)).all()
     return {'users': users}
-

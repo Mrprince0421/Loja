@@ -2,7 +2,7 @@ from http import HTTPStatus
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 import DB, security, schemas, models
 
@@ -19,6 +19,7 @@ def create_product(
         product: schemas.ProductSchema, session: T_Session, current_user: T_CurrentUser
 ):
     db_product = models.Product(
+        user_id=current_user.id,
         name=product.name,
         description=product.description,
         price=product.price,
@@ -31,20 +32,25 @@ def create_product(
     return db_product
 
 
-@router.get('/', response_model=list[schemas.ProductPublic])
+@router.get('/', response_model=schemas.ProductListResponse)
 def read_products(
         session: T_Session,
+        current_user: T_CurrentUser,
         skip: int = 0,
         limit: int = 100,
         name: str | None = Query(None),
         product_id: int | None = Query(None)
 ):
-    query = select(models.Product)
+    query = select(models.Product).where(models.Product.user_id == current_user.id)
     if name:
         query = query.where(models.Product.name.contains(name))
     if product_id:
         query = query.where(models.Product.id == product_id)
 
+    # Obter a contagem total antes de aplicar a paginação
+    total_count = session.scalar(select(func.count()).select_from(query.subquery()))
+
+    # Aplicar paginação
     products = session.scalars(query.offset(skip).limit(limit)).all()
 
     if not products:
@@ -53,7 +59,7 @@ def read_products(
             detail="Product(s) not found"
         )
 
-    return products
+    return schemas.ProductListResponse(products=products, total_count=total_count)
 
 
 @router.put('/{product_id}', response_model=schemas.ProductPublic)
@@ -63,7 +69,12 @@ def update_product(
         session: T_Session,
         current_user: T_CurrentUser
 ):
-    db_product = session.scalar(select(models.Product).where(models.Product.id == product_id))
+    db_product = session.scalar(
+        select(models.Product).where(
+            models.Product.id == product_id,
+            models.Product.user_id == current_user.id
+        )
+    )
     if not db_product:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
@@ -85,9 +96,14 @@ def update_product(
     response_model=None
 )
 def delete_product(
-    product_id: int, session: T_Session, current_user: T_CurrentUser
+        product_id: int, session: T_Session, current_user: T_CurrentUser
 ):
-    db_product = session.scalar(select(models.Product).where(models.Product.id == product_id))
+    db_product = session.scalar(
+        select(models.Product).where(
+            models.Product.id == product_id,
+            models.Product.user_id == current_user.id
+        )
+    )
     if not db_product:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
