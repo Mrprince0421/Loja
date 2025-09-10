@@ -1,0 +1,9 @@
+.env
+.git
+.gitignore
+.venv
+pycache/
+*.pyc
+tests/
+alembic/
+postgres_data/
